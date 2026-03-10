@@ -1,3 +1,6 @@
+#ifndef CHIP8_H
+#define CHIP8_H
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -33,3 +36,4 @@ void chip8_init(CHIP8* cpu);
 void update_timers(CHIP8* cpu);
 void step(CHIP8* cpu);
 
+#endif

@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     CHIP8 cpu;
     chip8_init(&cpu);
     if(load_rom(&cpu, argv[1]) != 0) return 1;
-
+    display_init();
 
     while (g_running) {
         for(int i = 0; i < INSTRUCTIONS_PER_FRAME; i++) {
@@ -21,6 +21,6 @@ int main(int argc, char** argv) {
         }
 
         update_timers(&cpu);
-        // SDL 
+        SDL_Delay(1000/60);
     }
 }

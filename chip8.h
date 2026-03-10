@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #define INSTRUCTIONS_PER_FRAME 10
+
+#define REG_V0 0x0
+#define REG_VF 0xF
 
 int g_running;
 

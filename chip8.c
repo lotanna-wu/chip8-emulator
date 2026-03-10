@@ -1,6 +1,8 @@
 #include "chip8.h"
 
 void chip8_init(CHIP8* cpu) {
+    srand(time(NULL));
+
     cpu->PC          = 0x200;
     cpu->SP          = 0;
     cpu->I           = 0;
@@ -74,98 +76,233 @@ void decode_exec(CHIP8* cpu, uint16_t opcode) {
     uint8_t  nn  = (opcode & 0x00FF);
     uint16_t nnn = (opcode & 0x0FFF);
 
-    switch(opcode & 0xF000) {
+    switch (opcode & 0xF000) {
         case 0x0000: {
-            switch(opcode & 0x00FF) {
-                case 0x00E0: // CLS
-                case 0x00EE: // RET
+            switch (opcode & 0x00FF) {
+                case 0x00E0: {
+                    // CLS
+                    memset(cpu->display, 0, sizeof(cpu->display));
+                    cpu->draw_flag = 1;
+                    break;
+                }
+                case 0x00EE: {
+                    // RET
+                    cpu->SP--;
+                    cpu->PC = cpu->stack[cpu->SP];
+                    break;
+                }
             }
             break;
         }
-        case 0x1000: {
+        case 0x1000: { 
             // JP nnn
-            uint16_t addr = nnn;
-            // ...
+            cpu->PC = nnn;
             break;
         }
-        case 0x2000: {
+        case 0x2000: { 
             // CALL nnn
-            uint16_t addr = nnn;
-            // ...
+            cpu->stack[cpu->SP] = cpu->PC;
+            cpu->SP++;
+            cpu->PC = nnn;
             break;
         }
-        case 0x3000: {
+        case 0x3000: { 
             // SE Vx, nn
-            uint8_t Vx = cpu->V[x];
-            if (Vx == nn) cpu-> PC += 2;
+            if (cpu->V[x] == nn) cpu->PC += 2;
             break;
         }
-        case 0x4000: {
-            uint8_t Vx = cpu->V[x];
-            if (Vx != nn) cpu-> PC += 2;
+        case 0x4000: { 
+            // SNE Vx, nn
+            if (cpu->V[x] != nn) cpu->PC += 2;
             break;
         }
-        case 0x5000: {
-            // SNE Vx, Vy
-            uint8_t Vx = cpu->V[x];
-            uint8_t Vy = cpu->V[y];
-            if(Vx == Vy) cpu->PC += 2;
+        case 0x5000: { 
+            // SE Vx, Vy
+            if (cpu->V[x] == cpu->V[y]) cpu->PC += 2;
+            break;
         }
         case 0x6000: {
             // LD Vx, nn
-            cpu->V[x] = nn;   
-            break;     
+            cpu->V[x] = nn;
+            break;
         }
-        case 0x7000: {
+        case 0x7000: { 
             // ADD Vx, nn
             cpu->V[x] += nn;
             break;
         }
         case 0x8000: {
-            switch(n) {
-                case 0x000: {
+            switch (n) {
+                case 0x0: { 
                     // LD Vx, Vy
                     cpu->V[x] = cpu->V[y];
                     break;
                 }
-                case 0x001: {
-
+                case 0x1: { 
+                    // OR Vx, Vy
+                    cpu->V[x] |= cpu->V[y];
+                    break;
                 }
-                case 0x002: {
-
+                case 0x2: { 
+                    // AND Vx, Vy
+                    cpu->V[x] &= cpu->V[y];
+                    break;
                 }
-                case 0x003: {
-
+                case 0x3: { 
+                    // XOR Vx, Vy
+                    cpu->V[x] ^= cpu->V[y];
+                    break;
                 }
-                case 0x004: {
-
+                case 0x4: { 
+                    // ADD Vx, Vy
+                    uint8_t Vx    = cpu->V[x];
+                    uint8_t sum   = Vx + cpu->V[y];
+                    uint8_t carry = (sum < Vx) ? 1 : 0;
+                    cpu->V[x]     = sum;
+                    cpu->V[0xF]   = carry;
+                    break;
                 }
-                case 0x005: {
-
+                case 0x5: { 
+                    // SUB Vx, Vy
+                    uint8_t Vx         = cpu->V[x];
+                    uint8_t Vy         = cpu->V[y];
+                    uint8_t did_borrow = (Vx <= Vy) ? 1 : 0;
+                    cpu->V[x]          = Vx - Vy;
+                    cpu->V[0xF]        = !did_borrow;
+                    break;
                 }
-                case 0x006: {
-
+                case 0x6: { 
+                    // SHR Vx {, Vy}
+                    uint8_t Vx  = cpu->V[x];
+                    cpu->V[x]   = Vx >> 1;
+                    cpu->V[0xF] = Vx & 0x1;
+                    break;
                 }
-                case 0x007: {
-
+                case 0x7: {
+                    // SUBN Vx, Vy
+                    uint8_t Vx         = cpu->V[x];
+                    uint8_t Vy         = cpu->V[y];
+                    uint8_t did_borrow = (Vy <= Vx) ? 1 : 0;
+                    cpu->V[x]          = Vy - Vx;
+                    cpu->V[0xF]        = !did_borrow;
+                    break;
                 }
-                case 0x00E: {
-
+                case 0xE: {
+                    // SHL Vx {, Vy}
+                    uint8_t Vx  = cpu->V[x];
+                    cpu->V[x]   = Vx << 1;
+                    cpu->V[0xF] = (Vx >> 7) & 0x1;
+                    break;
                 }
-                break;
+            }
+            break;
+        }
+        case 0x9000: {
+            uint8_t Vx =  cpu->V[x];
+            uint8_t Vy =  cpu->V[y];
+            if (Vx != Vy) cpu->PC += 2;
+            break;
+        }
+        case 0xA000: {
+            //LD I, nnn
+            cpu->I = nnn;
+            break;
+        }
+        case 0xB000: {
+            // JP V0, addr
+            cpu->PC = cpu->V[0] + nnn;
+            break;
+        }
+        case 0xC000: {
+            // RND Vx, nn
+            cpu->V[x] = (rand() % 256) & nn;
+            break;
+        }
+        case 0xD000: {
+            // TODO
+            // DRW Vx, Vy, n
+            break;
+        }
+        case 0xE000: {
+            switch(nn) {
+                case 0x9E: {
+                    // SKP Vx
+                    if (cpu->keys[cpu->V[x]]) cpu->PC += 2;
+                    break;
+                }
+                case 0xA1: {
+                    // SKNP Vx
+                    if (!cpu->keys[cpu->V[x]]) cpu->PC += 2;
+                    break;
+                }
             }
         }
-        case 0x9000:
-        case 0xA000:
-        case 0xB000:
-        case 0xC000:
-        case 0xD000:
-        case 0xE000:
-        case 0xF000:
+        case 0xF000: {
+            switch(nn) {
+                case 0x07: {
+                    // LD Vx, DT
+                    cpu->V[x] = cpu->delay_timer;
+                    break;
+                }
+                case 0x0A: {
+                    // LD Vx, K
+                    // For now im going to implement this by rewinding this instruction until key is pressed
+                    for (int i = 0; i < 16; i++) {
+                        if (cpu->keys[i]) {
+                            cpu->V[x] = i;
+                            return;
+                        }
+                    }
+                    cpu->PC -= 2;
+                    break;
+                }
+                case 0x15: {
+                    // LD DT, Vx
+                    cpu->delay_timer = cpu->V[x];
+                    break;
+                }
+                case 0x18: {
+                    // LD ST, Vx
+                    cpu->sound_timer = cpu->V[x];
+                    break;
+                }
+                case 0x1E: {
+                    // ADD I, Vx
+                    cpu->I += cpu->V[x];
+                    break;
+                }
+                case 0x29: {
+                    // LD F, Vx
+                    if (cpu->V[x] > 0xF) break; 
+                    cpu->I = cpu->V[x] * 5;
+                    break;
+                }
+                case 0x33: {
+                    // LD B, Vx
+                    uint8_t Vx = cpu->V[x];
+                    cpu->memory[cpu->I]     = Vx / 100;
+                    cpu->memory[cpu->I + 1] = (Vx / 10) % 10;
+                    cpu->memory[cpu->I + 2] = Vx % 10;
+                    break;             
+                }
+                case 0x55: {
+                    // LD [I], Vx
+                    for (int i = 0; i <= x; i++) {
+                        cpu->memory[cpu->I + i] = cpu->V[i];
+                    }
+                    break;
+                }
+                case 0x65: {
+                    // LD Vx, [I]
+                    for (int i = 0; i <= x; i++) {
+                        cpu->V[i] = cpu->memory[cpu->I + i];
+                    }
+                    break;
+                }
+            }
+            break;
+        }
     }
-}
-
-void execute(CHIP8* cpu) {
 }
 
 void update_timers(CHIP8* cpu) {

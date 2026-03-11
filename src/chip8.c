@@ -9,6 +9,7 @@ void chip8_init(CHIP8* cpu) {
     cpu->delay_timer = 0;
     cpu->sound_timer = 0;
     cpu->draw_flag   = 0;
+    cpu->running     = 0;
 
     memset(cpu->V,       0, sizeof(cpu->V));
     memset(cpu->stack,   0, sizeof(cpu->stack));
@@ -52,15 +53,14 @@ int load_rom(CHIP8* cpu, const char* path) {
     }
 
     fclose(f);
-    g_running = 1;
+    cpu->running = 1;
     return 0;
 }
 
 void step(CHIP8* cpu) {
     uint16_t opcode = fetch(cpu);
 
-    decode(cpu, opcode);
-    execute(cpu);
+    decode_exec(cpu, opcode);
 }
 
 uint16_t fetch(CHIP8* cpu) {
@@ -78,14 +78,15 @@ void decode_exec(CHIP8* cpu, uint16_t opcode) {
 
     switch (opcode & 0xF000) {
         case 0x0000: {
-            switch (opcode & 0x00FF) {
-                case 0x00E0: {
+            switch (nn) {
+                case 0xE0: {
                     // CLS
-                    memset(cpu->display, 0, sizeof(cpu->display));
+                    for (int i = 0; i < 64 * 32; i++)
+                        cpu->display[i] = PIXEL_OFF;
                     cpu->draw_flag = 1;
                     break;
                 }
-                case 0x00EE: {
+                case 0xEE: {
                     // RET
                     cpu->SP--;
                     cpu->PC = cpu->stack[cpu->SP];
@@ -101,6 +102,11 @@ void decode_exec(CHIP8* cpu, uint16_t opcode) {
         }
         case 0x2000: { 
             // CALL nnn
+            if (cpu->SP >= 16) {
+                // stack overflow
+                cpu->running = 0;
+                break;
+            }
             cpu->stack[cpu->SP] = cpu->PC;
             cpu->SP++;
             cpu->PC = nnn;
@@ -219,23 +225,43 @@ void decode_exec(CHIP8* cpu, uint16_t opcode) {
             break;
         }
         case 0xD000: {
-            // TODO
             // DRW Vx, Vy, n
+            uint8_t xpos = cpu->V[x] % CHIP8_WIDTH;
+            uint8_t ypos = cpu->V[y] % CHIP8_HEIGHT;
+            cpu->V[REG_VF] = 0;
+
+            for (int r = 0; r < n; r++) {
+                uint8_t sprite = cpu->memory[cpu->I + r];
+
+                for (int c = 0; c < 8; c++) {
+                    if (sprite & (0x80 >> c)) {
+                        int px = (xpos + c) % 64;
+                        int py = (ypos + r) % 32;
+                        int idx = px + (CHIP8_WIDTH * py);
+
+                        if (cpu->display[idx]) cpu->V[0xF] = 1;
+                        cpu->display[idx] ^= PIXEL_ON;
+
+                    } 
+                }
+            }
+            cpu->draw_flag = 1;
             break;
         }
         case 0xE000: {
             switch(nn) {
                 case 0x9E: {
                     // SKP Vx
-                    if (cpu->keys[cpu->V[x]]) cpu->PC += 2;
+                    if (cpu->keys[cpu->V[x] & 0xF]) cpu->PC += 2;
                     break;
                 }
                 case 0xA1: {
                     // SKNP Vx
-                    if (!cpu->keys[cpu->V[x]]) cpu->PC += 2;
+                    if (!cpu->keys[cpu->V[x] & 0xF]) cpu->PC += 2;
                     break;
                 }
             }
+            break;
         }
         case 0xF000: {
             switch(nn) {
@@ -308,4 +334,39 @@ void decode_exec(CHIP8* cpu, uint16_t opcode) {
 void update_timers(CHIP8* cpu) {
     if (cpu->delay_timer > 0) cpu->delay_timer--;
     if (cpu->sound_timer > 0) cpu->sound_timer--;
+}
+
+
+// debugging
+
+void dump_state(CHIP8* cpu) {
+    printf("=== chip8 dump ===\n");
+
+    printf("Registers:\n");
+    for (int i = 0; i < 16; i++)
+        printf("  V%X: 0x%02X (%d)\n", i, cpu->V[i], cpu->V[i]);
+
+    printf("\nSpecial Registers:\n");
+    printf("  PC: 0x%03X\n", cpu->PC);
+    printf("  I:  0x%03X <- mem[I]: 0x%02X\n", cpu->I, cpu->memory[cpu->I]);
+    printf("  SP: %d\n", cpu->SP);
+
+    printf("\nTimers:\n");
+    printf("  Delay: %d\n", cpu->delay_timer);
+    printf("  Sound: %d\n", cpu->sound_timer);
+
+    printf("\nStack:\n");
+    for (int i = 0; i < cpu->SP; i++)
+        printf("  [%d]: 0x%03X%s\n", i, cpu->stack[i], i == cpu->SP - 1 ? " <- SP" : "");
+
+    printf("\nKeys:\n");
+    for (int i = 0; i < 16; i++)
+        printf("  %X:%c ", i, cpu->keys[i] ? '#' : '.');
+    printf("\n");
+
+    printf("\nNext opcode: 0x%02X%02X\n",
+        cpu->memory[cpu->PC],
+        cpu->memory[cpu->PC + 1]);
+
+    printf("====================\n");
 }

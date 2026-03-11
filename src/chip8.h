@@ -7,12 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#define INSTRUCTIONS_PER_FRAME 10
+#include "display.h"
+
+//timing
+#define CPU_HZ        500
+#define TIMER_HZ      60
+#define MS_PER_INSTR  (1000 / CPU_HZ)
 
 #define REG_V0 0x0
 #define REG_VF 0xF
-
-int g_running;
 
 typedef struct {
     uint8_t  V[16];
@@ -26,6 +29,7 @@ typedef struct {
     uint32_t display[64 * 32];
     uint8_t  keys[16];
     uint8_t draw_flag;
+    uint8_t running;
 } CHIP8;
 
 uint16_t fetch(CHIP8* cpu);
@@ -36,4 +40,6 @@ void chip8_init(CHIP8* cpu);
 void update_timers(CHIP8* cpu);
 void step(CHIP8* cpu);
 
+//debugging
+void dump_state(CHIP8* cpu);
 #endif

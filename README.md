@@ -38,6 +38,10 @@ a s d f
 z x c v
 ```
 
+**Screenshots**
+![Pong](images/pong-chip8.png)
+![Slippery Slope](images/slipperyslope-chip8.png)
+
 **Project Layout**
 - `src/chip8.c`: CPU core, opcode decode/execute, timers
 - `src/display.c`: SDL window/texture rendering
